@@ -1,0 +1,110 @@
+/* Search Page Styles */
+.search {
+  padding: 0;
+}
+
+.searchCard {
+  text-align: center;
+  padding: 40px;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  margin-bottom: 24px;
+}
+
+.searchContent {
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.searchIcon {
+  font-size: 48px;
+  color: #1890ff;
+  margin-bottom: 16px;
+}
+
+.searchBox {
+  margin-top: 32px;
+  max-width: 500px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.searchInput {
+  border-radius: 8px;
+}
+
+.searchInput .ant-input {
+  border-radius: 8px 0 0 8px;
+  border: 2px solid #d9d9d9;
+  padding: 12px 16px;
+  font-size: 16px;
+}
+
+.searchInput .ant-input:focus,
+.searchInput .ant-input:hover {
+  border-color: #1890ff;
+  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2);
+}
+
+.searchInput .ant-input-search-button {
+  border-radius: 0 8px 8px 0;
+  border: 2px solid #1890ff;
+  background: #1890ff;
+  height: 48px;
+  padding: 0 24px;
+}
+
+.searchInput .ant-input-search-button:hover {
+  background: #40a9ff;
+  border-color: #40a9ff;
+}
+
+.placeholderCard {
+  text-align: center;
+  padding: 40px;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.placeholderContent {
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.featureList {
+  text-align: left;
+  max-width: 400px;
+  margin: 24px auto;
+  padding-left: 20px;
+}
+
+.featureList li {
+  margin-bottom: 8px;
+  color: #666;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .searchCard,
+  .placeholderCard {
+    padding: 24px;
+  }
+  
+  .searchIcon {
+    font-size: 40px;
+  }
+  
+  .searchBox {
+    margin-top: 24px;
+  }
+  
+  .searchInput .ant-input {
+    font-size: 14px;
+    padding: 10px 14px;
+  }
+  
+  .searchInput .ant-input-search-button {
+    height: 44px;
+    padding: 0 20px;
+  }
+}

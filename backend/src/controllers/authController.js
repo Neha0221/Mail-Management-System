@@ -51,18 +51,11 @@ class AuthController {
 
       await user.save();
 
-      // Generate JWT token
-      const token = AuthController.generateToken(user._id);
-      const refreshToken = AuthController.generateRefreshToken(user._id);
-
-      // Update last login
-      await user.updateLastLogin();
-
       logger.info(`New user registered: ${user.email}`);
 
       res.status(201).json({
         success: true,
-        message: 'User registered successfully',
+        message: 'User registered successfully. Please login to continue.',
         data: {
           user: {
             id: user._id,
@@ -73,9 +66,7 @@ class AuthController {
             isEmailVerified: user.isEmailVerified,
             subscription: user.subscription,
             preferences: user.preferences
-          },
-          token,
-          refreshToken
+          }
         }
       });
     } catch (error) {

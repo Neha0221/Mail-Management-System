@@ -1,0 +1,139 @@
+/* Register Page Styles */
+.registerContainer {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 20px;
+}
+
+.registerCard {
+  width: 100%;
+  max-width: 450px;
+}
+
+.card {
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  border: none;
+  backdrop-filter: blur(10px);
+  background: rgba(255, 255, 255, 0.95);
+}
+
+.header {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.logo {
+  margin-bottom: 16px;
+}
+
+.logoIcon {
+  font-size: 48px;
+  color: #1890ff;
+}
+
+.title {
+  margin-bottom: 8px !important;
+  color: #262626;
+  font-weight: 600;
+}
+
+.subtitle {
+  font-size: 14px;
+  color: #8c8c8c;
+}
+
+.form {
+  margin-bottom: 24px;
+}
+
+.input {
+  border-radius: 8px;
+  border: 1px solid #d9d9d9;
+  padding: 12px 16px;
+  font-size: 14px;
+}
+
+.input:focus,
+.input:hover {
+  border-color: #1890ff;
+  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2);
+}
+
+.registerButton {
+  height: 48px;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 500;
+  background: linear-gradient(135deg, #1890ff 0%, #096dd9 100%);
+  border: none;
+  box-shadow: 0 4px 12px rgba(24, 144, 255, 0.3);
+  transition: all 0.3s ease;
+}
+
+.registerButton:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(24, 144, 255, 0.4);
+}
+
+.registerButton:active {
+  transform: translateY(0);
+}
+
+.divider {
+  margin: 24px 0;
+}
+
+.footer {
+  text-align: center;
+}
+
+.footerText {
+  font-size: 14px;
+}
+
+.loginLink {
+  color: #1890ff;
+  font-weight: 500;
+  padding: 0;
+}
+
+.loginLink:hover {
+  color: #40a9ff;
+}
+
+/* Responsive Design */
+@media (max-width: 480px) {
+  .registerContainer {
+    padding: 16px;
+  }
+  
+  .registerCard {
+    max-width: 100%;
+  }
+  
+  .card {
+    border-radius: 8px;
+  }
+  
+  .logoIcon {
+    font-size: 40px;
+  }
+  
+  .title {
+    font-size: 24px !important;
+  }
+  
+  .input {
+    padding: 10px 14px;
+    font-size: 13px;
+  }
+  
+  .registerButton {
+    height: 44px;
+    font-size: 15px;
+  }
+}

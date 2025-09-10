@@ -1,0 +1,45 @@
+/* Emails Page Styles */
+.emails {
+  padding: 0;
+}
+
+.placeholderCard {
+  text-align: center;
+  padding: 60px 40px;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.placeholderContent {
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.placeholderIcon {
+  font-size: 64px;
+  color: #1890ff;
+  margin-bottom: 24px;
+}
+
+.featureList {
+  text-align: left;
+  max-width: 400px;
+  margin: 24px auto;
+  padding-left: 20px;
+}
+
+.featureList li {
+  margin-bottom: 8px;
+  color: #666;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .placeholderCard {
+    padding: 40px 20px;
+  }
+  
+  .placeholderIcon {
+    font-size: 48px;
+  }
+}

@@ -1,0 +1,46 @@
+/* Loading Spinner Styles */
+.spinnerContainer {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 200px;
+  width: 100%;
+}
+
+.spinner {
+  width: 100%;
+}
+
+.spinner .ant-spin-container {
+  width: 100%;
+}
+
+/* Full page loading */
+.fullPage {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.8);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+}
+
+/* Inline loading */
+.inline {
+  display: inline-block;
+  margin: 0 8px;
+}
+
+/* Small loading */
+.small {
+  min-height: 100px;
+}
+
+/* Large loading */
+.large {
+  min-height: 400px;
+}
