@@ -6,8 +6,7 @@ class AnalyticsService {
   async getOverview(params = {}) {
     try {
       console.log('getOverview', params);
-      console.log('API_ENDPOINTS.ANALYTICS.OVERVIEW', API_ENDPOINTS.ANALYTICS.OVERVIEW);
-      const response = await apiClient.get(API_ENDPOINTS.ANALYTICS.OVERVIEW, { params });
+      const response = await apiClient.get('/analytics/overview', { params });
       console.log('response', response.data);
       return response.data;
     } catch (error) {
@@ -19,8 +18,7 @@ class AnalyticsService {
   async getSenderStats(params = {}) {
     try {
       console.log('getSenderStats', params);
-      console.log('API_ENDPOINTS.ANALYTICS.SENDER_STATS', API_ENDPOINTS.ANALYTICS.SENDER_STATS);
-      const response = await apiClient.get(API_ENDPOINTS.ANALYTICS.SENDER_STATS, { params });
+      const response = await apiClient.get('/analytics/senders', { params });
       return response.data;
     } catch (error) {
       throw error;
@@ -31,8 +29,7 @@ class AnalyticsService {
   async getDomainStats(params = {}) {
     try {
       console.log('getDomainStats', params);
-      console.log('API_ENDPOINTS.ANALYTICS.DOMAIN_STATS', API_ENDPOINTS.ANALYTICS.DOMAIN_STATS);
-      const response = await apiClient.get(API_ENDPOINTS.ANALYTICS.DOMAIN_STATS, { params });
+      const response = await apiClient.get('/analytics/domains', { params });
       return response.data;
     } catch (error) {
       throw error;
@@ -43,8 +40,7 @@ class AnalyticsService {
   async getESPStats(params = {}) {
     try {
       console.log('getESPStats', params);
-      console.log('API_ENDPOINTS.ANALYTICS.ESP_STATS', API_ENDPOINTS.ANALYTICS.ESP_STATS);
-      const response = await apiClient.get(API_ENDPOINTS.ANALYTICS.ESP_STATS, { params });
+      const response = await apiClient.get('/analytics/esp', { params });
       return response.data;
     } catch (error) {
       throw error;
@@ -54,7 +50,7 @@ class AnalyticsService {
   // Get time delta analysis
   async getTimeDeltaAnalysis(params = {}) {
     try {
-      const response = await apiClient.get(API_ENDPOINTS.ANALYTICS.TIME_DELTA, { params });
+      const response = await apiClient.get('/analytics/time-delta', { params });
       return response.data;
     } catch (error) {
       throw error;
@@ -64,7 +60,7 @@ class AnalyticsService {
   // Get security analysis
   async getSecurityAnalysis(params = {}) {
     try {
-      const response = await apiClient.get(API_ENDPOINTS.ANALYTICS.SECURITY_ANALYSIS, { params });
+      const response = await apiClient.get('/analytics/security', { params });
       return response.data;
     } catch (error) {
       throw error;
@@ -74,7 +70,7 @@ class AnalyticsService {
   // Generate custom report
   async generateCustomReport(reportParams) {
     try {
-      const response = await apiClient.post(API_ENDPOINTS.ANALYTICS.CUSTOM_REPORT, reportParams);
+      const response = await apiClient.get('/analytics/export', { params: reportParams });
       return response.data;
     } catch (error) {
       throw error;
@@ -84,7 +80,7 @@ class AnalyticsService {
   // Get email volume trends
   async getEmailVolumeTrends(params = {}) {
     try {
-      const response = await apiClient.get(`${API_ENDPOINTS.ANALYTICS.BASE}/volume-trends`, { params });
+      const response = await apiClient.get('/analytics/volume-trends', { params });
       return response.data;
     } catch (error) {
       throw error;

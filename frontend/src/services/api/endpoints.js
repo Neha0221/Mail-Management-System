@@ -17,7 +17,7 @@ export const API_ENDPOINTS = {
     GET_BY_ID: (id) => `/email-accounts/${id}`,
     UPDATE: (id) => `/email-accounts/${id}`,
     DELETE: (id) => `/email-accounts/${id}`,
-    TEST_CONNECTION: '/email-accounts/test-connection',
+    TEST_CONNECTION: (id) => `/email-accounts/${id}/test-connection`,
   },
 
   // Emails

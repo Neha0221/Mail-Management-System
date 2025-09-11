@@ -35,8 +35,22 @@ class SearchService extends EventEmitter {
       const startTime = Date.now();
       
       // Validate input
-      if (!userId || !query) {
-        throw new Error('User ID and query are required');
+      if (!userId) {
+        throw new Error('User ID is required');
+      }
+      
+      if (!query || query.trim() === '') {
+        // Return empty results for empty query
+        return {
+          query: query || '',
+          totalResults: 0,
+          results: [],
+          facets: {},
+          suggestions: [],
+          searchTime: Date.now() - startTime,
+          cached: false,
+          timestamp: new Date()
+        };
       }
 
       // Check cache first
@@ -49,9 +63,11 @@ class SearchService extends EventEmitter {
 
       // Build search query
       const searchQuery = this.buildEmailSearchQuery(userId, query, options);
+      logger.info(`Search query built for user ${userId}:`, JSON.stringify(searchQuery, null, 2));
       
       // Execute search
       const results = await this.executeEmailSearch(searchQuery, options);
+      logger.info(`Search executed for user ${userId}: ${results.totalCount} results found`);
       
       // Process results
       const processedResults = await this.processSearchResults(results, options);
@@ -107,6 +123,11 @@ class SearchService extends EventEmitter {
     // Text search
     if (query && query.trim()) {
       baseQuery.$text = { $search: query };
+    }
+    
+    // Account ID filter
+    if (options.accountId) {
+      baseQuery.emailAccountId = options.accountId;
     }
     
     // Date filters
@@ -827,6 +848,175 @@ class SearchService extends EventEmitter {
       maxSearchHistory: this.maxSearchHistory,
       cacheTimeout: this.cacheTimeout
     };
+  }
+
+  /**
+   * Get saved searches for a user
+   * @param {string} userId - User ID
+   * @param {Object} options - Query options
+   * @returns {Promise<Array>} Saved searches
+   */
+  async getSavedSearches(userId, options = {}) {
+    try {
+      const { page = 1, limit = 50, sortBy = 'createdAt', sortOrder = 'desc' } = options;
+      
+      // For now, return saved searches from user's search history
+      // In a real implementation, you'd have a SavedSearch model
+      const userHistory = this.searchHistory.get(userId) || [];
+      
+      // Sort by frequency and recency
+      const savedSearches = userHistory
+        .filter(search => search.saved) // Only return saved searches
+        .sort((a, b) => {
+          if (sortBy === 'createdAt') {
+            return sortOrder === 'desc' ? b.timestamp - a.timestamp : a.timestamp - b.timestamp;
+          }
+          return 0;
+        })
+        .slice((page - 1) * limit, page * limit)
+        .map(search => ({
+          id: search.id || search.query,
+          name: search.name || search.query,
+          query: search.query,
+          filters: search.filters || {},
+          createdAt: search.timestamp,
+          lastUsed: search.lastUsed || search.timestamp,
+          useCount: search.count || 1
+        }));
+
+      return {
+        searches: savedSearches,
+        total: userHistory.filter(s => s.saved).length,
+        page,
+        limit
+      };
+    } catch (error) {
+      logger.error('Get saved searches error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Save a search query
+   * @param {string} userId - User ID
+   * @param {Object} searchData - Search data to save
+   * @returns {Promise<Object>} Saved search
+   */
+  async saveSearchQuery(userId, searchData) {
+    try {
+      const { query, filters = {}, name } = searchData;
+      
+      if (!query) {
+        throw new Error('Search query is required');
+      }
+
+      const savedSearch = {
+        id: `${userId}_${Date.now()}`,
+        name: name || query,
+        query,
+        filters,
+        saved: true,
+        timestamp: new Date(),
+        lastUsed: new Date(),
+        count: 1
+      };
+
+      // Add to user's search history
+      const userHistory = this.searchHistory.get(userId) || [];
+      userHistory.unshift(savedSearch);
+      
+      // Keep only the latest entries
+      if (userHistory.length > this.maxSearchHistory) {
+        userHistory.splice(this.maxSearchHistory);
+      }
+      
+      this.searchHistory.set(userId, userHistory);
+
+      logger.info(`Saved search query for user ${userId}: ${query}`);
+      return savedSearch;
+    } catch (error) {
+      logger.error('Save search query error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Delete a saved search
+   * @param {string} userId - User ID
+   * @param {string} searchId - Search ID to delete
+   * @returns {Promise<boolean>} Success status
+   */
+  async deleteSavedSearch(userId, searchId) {
+    try {
+      const userHistory = this.searchHistory.get(userId) || [];
+      const initialLength = userHistory.length;
+      
+      const updatedHistory = userHistory.filter(search => 
+        search.id !== searchId && search.query !== searchId
+      );
+      
+      this.searchHistory.set(userId, updatedHistory);
+      
+      const deleted = updatedHistory.length < initialLength;
+      if (deleted) {
+        logger.info(`Deleted saved search ${searchId} for user ${userId}`);
+      }
+      
+      return deleted;
+    } catch (error) {
+      logger.error('Delete saved search error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get search suggestions
+   * @param {string} userId - User ID
+   * @param {string} query - Partial query
+   * @param {Object} options - Options
+   * @returns {Promise<Array>} Search suggestions
+   */
+  async getSearchSuggestions(userId, query, options = {}) {
+    try {
+      const { limit = 10, type = 'all' } = options;
+      const suggestions = [];
+
+      // Get suggestions from user's search history
+      const userHistory = this.searchHistory.get(userId) || [];
+      const historySuggestions = userHistory
+        .filter(search => search.query.toLowerCase().includes(query.toLowerCase()))
+        .slice(0, limit)
+        .map(search => ({
+          text: search.query,
+          type: 'history',
+          count: search.count || 1
+        }));
+
+      suggestions.push(...historySuggestions);
+
+      // Add common email search terms if needed
+      if (suggestions.length < limit && (type === 'all' || type === 'common')) {
+        const commonTerms = [
+          'from:', 'to:', 'subject:', 'body:', 'attachment:', 'date:',
+          'has:attachment', 'is:unread', 'is:read', 'is:flagged'
+        ].filter(term => term.includes(query.toLowerCase()));
+
+        commonTerms.forEach(term => {
+          if (suggestions.length < limit) {
+            suggestions.push({
+              text: term,
+              type: 'common',
+              count: 0
+            });
+          }
+        });
+      }
+
+      return suggestions.slice(0, limit);
+    } catch (error) {
+      logger.error('Get search suggestions error:', error);
+      throw error;
+    }
   }
 }
 

@@ -5,7 +5,7 @@ class EmailService {
   // Get all emails with pagination and filters
   async getEmails(params = {}) {
     try {
-      const response = await apiClient.get(API_ENDPOINTS.EMAILS.GET_ALL, { params });
+      const response = await apiClient.get('/emails', { params });
       return response.data;
     } catch (error) {
       throw error;
@@ -15,7 +15,7 @@ class EmailService {
   // Get email by ID
   async getEmailById(id) {
     try {
-      const response = await apiClient.get(API_ENDPOINTS.EMAILS.GET_BY_ID(id));
+      const response = await apiClient.get(`/emails/${id}`);
       return response.data;
     } catch (error) {
       throw error;
@@ -25,7 +25,7 @@ class EmailService {
   // Get emails by account ID
   async getEmailsByAccount(accountId, params = {}) {
     try {
-      const response = await apiClient.get(API_ENDPOINTS.EMAILS.GET_BY_ACCOUNT(accountId), { params });
+      const response = await apiClient.get(`/emails/account/${accountId}`, { params });
       return response.data;
     } catch (error) {
       throw error;
@@ -35,7 +35,7 @@ class EmailService {
   // Search emails
   async searchEmails(searchParams) {
     try {
-      const response = await apiClient.post(API_ENDPOINTS.EMAILS.SEARCH, searchParams);
+      const response = await apiClient.post('/emails/search', searchParams);
       return response.data;
     } catch (error) {
       throw error;
@@ -45,7 +45,7 @@ class EmailService {
   // Mark email as read
   async markAsRead(id) {
     try {
-      const response = await apiClient.patch(API_ENDPOINTS.EMAILS.MARK_READ(id));
+      const response = await apiClient.put(`/emails/${id}/flags`, { isRead: true });
       return response.data;
     } catch (error) {
       throw error;
@@ -55,7 +55,7 @@ class EmailService {
   // Mark email as unread
   async markAsUnread(id) {
     try {
-      const response = await apiClient.patch(API_ENDPOINTS.EMAILS.MARK_UNREAD(id));
+      const response = await apiClient.put(`/emails/${id}/flags`, { isRead: false });
       return response.data;
     } catch (error) {
       throw error;
@@ -65,7 +65,7 @@ class EmailService {
   // Delete email
   async deleteEmail(id) {
     try {
-      const response = await apiClient.delete(API_ENDPOINTS.EMAILS.DELETE(id));
+      const response = await apiClient.delete(`/emails/${id}`);
       return response.data;
     } catch (error) {
       throw error;
@@ -75,7 +75,7 @@ class EmailService {
   // Sync emails
   async syncEmails(accountId) {
     try {
-      const response = await apiClient.post(API_ENDPOINTS.EMAILS.SYNC, { accountId });
+      const response = await apiClient.post('/emails/sync', { accountId });
       return response.data;
     } catch (error) {
       throw error;
@@ -85,7 +85,7 @@ class EmailService {
   // Get email content (HTML/text)
   async getEmailContent(id, format = 'html') {
     try {
-      const response = await apiClient.get(`${API_ENDPOINTS.EMAILS.GET_BY_ID(id)}/content`, {
+      const response = await apiClient.get(`/emails/${id}/content`, {
         params: { format }
       });
       return response.data;
@@ -97,7 +97,7 @@ class EmailService {
   // Get email attachments
   async getEmailAttachments(id) {
     try {
-      const response = await apiClient.get(`${API_ENDPOINTS.EMAILS.GET_BY_ID(id)}/attachments`);
+      const response = await apiClient.get(`/emails/${id}/attachments`);
       return response.data;
     } catch (error) {
       throw error;
@@ -108,7 +108,7 @@ class EmailService {
   async downloadAttachment(emailId, attachmentId) {
     try {
       const response = await apiClient.get(
-        `${API_ENDPOINTS.EMAILS.GET_BY_ID(emailId)}/attachments/${attachmentId}/download`,
+        `/emails/${emailId}/attachments/${attachmentId}/download`,
         { responseType: 'blob' }
       );
       return response.data;

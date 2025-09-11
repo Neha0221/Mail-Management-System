@@ -34,6 +34,15 @@ class ImapConnectionService extends EventEmitter {
       tlsOptions = {}
     } = config;
 
+    console.log('Input config for IMAP:', {
+      host,
+      port,
+      secure,
+      username,
+      password: password ? '[HAS_PASSWORD]' : '[NO_PASSWORD]',
+      authMethod
+    });
+
     const imapConfig = {
       user: username,
       password: password,
@@ -45,26 +54,45 @@ class ImapConnectionService extends EventEmitter {
         ...tlsOptions
       },
       connTimeout: this.connectionTimeout,
-      authTimeout: this.connectionTimeout,
-      keepalive: {
+      authTimeout: this.connectionTimeout
+    };
+
+    // Only add keepalive if not using XOAUTH2
+    if (!config.host?.includes('gmail.com') || authMethod.toUpperCase() !== 'PLAIN') {
+      imapConfig.keepalive = {
         interval: 10000,
         idleInterval: 300000,
         forceNoop: true
-      }
-    };
+      };
+    }
 
     // Handle different authentication methods
     switch (authMethod.toUpperCase()) {
       case 'OAUTH2':
+      case 'XOAUTH2':
         imapConfig.xoauth2 = password; // OAuth2 token
         delete imapConfig.password;
+        delete imapConfig.authMethod;
         break;
       case 'LOGIN':
         imapConfig.authMethod = 'LOGIN';
         break;
       case 'PLAIN':
       default:
-        imapConfig.authMethod = 'PLAIN';
+        // For Gmail, use App Password authentication
+        if (host && host.includes('gmail.com')) {
+          // Gmail requires App Passwords for IMAP access
+          // Remove authMethod to let the IMAP library handle it automatically
+          delete imapConfig.authMethod;
+          
+          // Add Gmail-specific configuration
+          imapConfig.tlsOptions = {
+            ...imapConfig.tlsOptions,
+            servername: 'imap.gmail.com'
+          };
+        } else {
+          imapConfig.authMethod = 'PLAIN';
+        }
         break;
     }
 
@@ -300,30 +328,67 @@ class ImapConnectionService extends EventEmitter {
   async testConnection(config) {
     try {
       const imapConfig = this.createImapConfig(config);
+      console.log('Created IMAP config:', {
+        ...imapConfig,
+        password: '[HIDDEN]'
+      });
       const imap = new Imap(imapConfig);
 
       return new Promise((resolve) => {
         const timeout = setTimeout(() => {
           imap.end();
-          resolve(false);
+          resolve({
+            success: false,
+            error: 'Connection timeout - server did not respond within 30 seconds'
+          });
         }, this.connectionTimeout);
 
         imap.once('ready', () => {
           clearTimeout(timeout);
           imap.end();
-          resolve(true);
+          resolve({
+            success: true,
+            error: null
+          });
         });
 
-        imap.once('error', () => {
+        imap.once('error', (error) => {
           clearTimeout(timeout);
-          resolve(false);
+          logger.error('IMAP connection error:', error);
+          
+          // Provide specific error messages for common Gmail issues
+          let errorMessage = error.message || 'IMAP connection failed';
+          
+          if (error.message && error.message.includes('No supported authentication method')) {
+            if (config.host && config.host.includes('gmail.com')) {
+              errorMessage = 'Gmail authentication failed. Please ensure you are using an App Password instead of your regular Gmail password. Enable 2-Factor Authentication and generate an App Password in your Google Account settings.';
+            } else {
+              errorMessage = 'Authentication method not supported by the server. Please check your credentials and authentication method.';
+            }
+          } else if (error.message && error.message.includes('Invalid credentials')) {
+            if (config.host && config.host.includes('gmail.com')) {
+              errorMessage = 'Invalid Gmail credentials. Please use an App Password instead of your regular Gmail password.';
+            } else {
+              errorMessage = 'Invalid username or password. Please check your credentials.';
+            }
+          } else if (error.message && error.message.includes('Connection timeout')) {
+            errorMessage = 'Connection timeout. Please check your internet connection and server settings.';
+          }
+          
+          resolve({
+            success: false,
+            error: errorMessage
+          });
         });
 
         imap.connect();
       });
     } catch (error) {
       logger.error('Connection test failed:', error);
-      return false;
+      return {
+        success: false,
+        error: error.message || 'Failed to create IMAP connection'
+      };
     }
   }
 }

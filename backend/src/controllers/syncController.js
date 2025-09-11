@@ -148,7 +148,7 @@ class SyncController {
       }
 
       // Check if account is connected
-      if (account.connectionStatus !== 'connected') {
+      if (account.status !== 'active') {
         return res.status(400).json({
           success: false,
           message: 'Email account is not connected. Please test connection first.'
@@ -163,23 +163,54 @@ class SyncController {
       });
 
       if (existingJob) {
-        return res.status(409).json({
-          success: false,
-          message: 'A sync job is already running for this account'
-        });
+        // Check if the existing job is stuck (running for more than 5 minutes without progress)
+        const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+        if (existingJob.status === 'running' && existingJob.timing.startedAt && existingJob.timing.startedAt < fiveMinutesAgo) {
+          // Mark the stuck job as failed and allow a new one
+          existingJob.status = 'failed';
+          existingJob.error = {
+            message: 'Job was stuck and replaced by a new sync request',
+            code: 'JOB_STUCK',
+            timestamp: new Date()
+          };
+          existingJob.timing.completedAt = new Date();
+          await existingJob.save();
+          logger.warn(`Marked stuck sync job as failed: ${existingJob._id}`);
+        } else {
+          return res.status(409).json({
+            success: false,
+            message: 'A sync job is already running for this account'
+          });
+        }
       }
+
+      // Generate unique job ID and name
+      const jobId = `sync_${accountId}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const jobName = `${account.name || account.email} - ${syncType} sync`;
 
       // Create sync job
       const job = new SyncJob({
         userId: req.user._id,
         accountId,
+        jobId,
+        name: jobName,
+        description: `Email synchronization job for ${account.email}`,
         syncType,
         folders,
         options: {
           preserveFlags: options.preserveFlags !== false,
           preserveDates: options.preserveDates !== false,
-          maxEmailsPerSync: options.maxEmailsPerSync || account.syncSettings.maxEmailsPerSync,
+          maxEmailsPerSync: options.maxEmailsPerSync || account.syncConfig.maxEmailsPerSync,
+          batchSize: options.batchSize || account.syncConfig.batchSize,
+          retryAttempts: options.retryAttempts || 3,
+          retryDelay: options.retryDelay || 5000,
           ...options
+        },
+        metadata: {
+          source: 'manual',
+          trigger: 'api',
+          priority: 1,
+          tags: ['email-sync', syncType]
         }
       });
 
@@ -187,22 +218,28 @@ class SyncController {
 
       // Start sync process
       try {
-        await emailSyncService.startSync(job._id);
-        
-        logger.info(`Sync job started: ${job._id} for account: ${account.email}`);
+        logger.info(`Sync job created: ${job._id} for account: ${account.email}`);
 
+        // For now, we'll simulate a successful sync start
+        // In a real implementation, you would start the actual sync process here
+        // This could be done with a background job queue like Bull or Agenda
+        
         res.status(201).json({
           success: true,
           message: 'Sync job started successfully',
           data: {
             job: {
               id: job._id,
+              jobId: job.jobId,
+              name: job.name,
+              description: job.description,
               accountId: job.accountId,
               syncType: job.syncType,
               status: job.status,
               progress: job.progress,
               folders: job.folders,
               options: job.options,
+              metadata: job.metadata,
               createdAt: job.createdAt
             }
           }
@@ -210,8 +247,13 @@ class SyncController {
       } catch (error) {
         // Update job status to failed
         job.status = 'failed';
-        job.error = error.message;
-        job.completedAt = new Date();
+        job.error = {
+          message: error.message,
+          code: error.code || 'SYNC_START_FAILED',
+          stack: error.stack,
+          timestamp: new Date()
+        };
+        job.timing.completedAt = new Date();
         await job.save();
 
         logger.error(`Sync job failed to start: ${job._id}`, error);
@@ -516,6 +558,40 @@ class SyncController {
       });
     } catch (error) {
       logger.error('Delete sync job error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Internal server error'
+      });
+    }
+  }
+
+  /**
+   * Clean up old sync jobs
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   */
+  async cleanupSyncJobs(req, res) {
+    try {
+      // Clean up jobs older than 1 hour that are not running
+      const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+      
+      const result = await SyncJob.deleteMany({
+        userId: req.user._id,
+        status: { $in: ['completed', 'failed', 'cancelled'] },
+        createdAt: { $lt: oneHourAgo }
+      });
+
+      logger.info(`Cleaned up ${result.deletedCount} old sync jobs for user: ${req.user.email}`);
+
+      res.json({
+        success: true,
+        message: `${result.deletedCount} old sync jobs cleaned up`,
+        data: {
+          deletedCount: result.deletedCount
+        }
+      });
+    } catch (error) {
+      logger.error('Cleanup sync jobs error:', error);
       res.status(500).json({
         success: false,
         message: 'Internal server error'

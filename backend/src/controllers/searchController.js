@@ -46,12 +46,21 @@ class SearchController {
         highlight
       };
 
+      // Clean and validate filters
+      const cleanedFilters = {};
+      Object.keys(filters).forEach(key => {
+        const value = filters[key];
+        if (value !== null && value !== undefined && value !== '') {
+          cleanedFilters[key] = value;
+        }
+      });
+
       // Perform search
       const searchResults = await searchService.searchEmails(
         searchOptions.userId,
         searchOptions.query,
         {
-          filters: searchOptions.filters,
+          ...cleanedFilters,
           sortBy: searchOptions.sortBy,
           sortOrder: searchOptions.sortOrder,
           page: searchOptions.page,
@@ -64,11 +73,11 @@ class SearchController {
         success: true,
         data: {
           results: searchResults.results,
-          totalCount: searchResults.totalCount,
+          totalCount: searchResults.totalResults || searchResults.totalCount,
           pagination: {
             currentPage: parseInt(page),
-            totalPages: Math.ceil(searchResults.totalCount / parseInt(limit)),
-            hasNextPage: parseInt(page) < Math.ceil(searchResults.totalCount / parseInt(limit)),
+            totalPages: Math.ceil((searchResults.totalResults || searchResults.totalCount) / parseInt(limit)),
+            hasNextPage: parseInt(page) < Math.ceil((searchResults.totalResults || searchResults.totalCount) / parseInt(limit)),
             hasPrevPage: parseInt(page) > 1,
             limit: parseInt(limit)
           },

@@ -19,9 +19,29 @@ class EmailAccountController {
         .select('-password -oauthToken -oauthRefreshToken')
         .sort({ createdAt: -1 });
 
+      // Transform accounts to have consistent ID field
+      const transformedAccounts = accounts.map(account => ({
+        id: account._id,
+        _id: account._id, // Keep both for compatibility
+        name: account.name,
+        email: account.email,
+        imapConfig: account.imapConfig,
+        authConfig: {
+          method: account.authConfig.method,
+          username: account.authConfig.username
+        },
+        syncConfig: account.syncConfig,
+        connectionStatus: account.connectionStatus,
+        lastConnectionTest: account.lastConnectionTest,
+        status: account.status,
+        isEnabled: account.isEnabled,
+        createdAt: account.createdAt,
+        updatedAt: account.updatedAt
+      }));
+
       res.json({
         success: true,
-        data: { accounts }
+        data: { accounts: transformedAccounts }
       });
     } catch (error) {
       logger.error('Get email accounts error:', error);
@@ -53,9 +73,29 @@ class EmailAccountController {
         });
       }
 
+      // Transform account to have consistent ID field
+      const transformedAccount = {
+        id: account._id,
+        _id: account._id, // Keep both for compatibility
+        name: account.name,
+        email: account.email,
+        imapConfig: account.imapConfig,
+        authConfig: {
+          method: account.authConfig.method,
+          username: account.authConfig.username
+        },
+        syncConfig: account.syncConfig,
+        connectionStatus: account.connectionStatus,
+        lastConnectionTest: account.lastConnectionTest,
+        status: account.status,
+        isEnabled: account.isEnabled,
+        createdAt: account.createdAt,
+        updatedAt: account.updatedAt
+      };
+
       res.json({
         success: true,
-        data: { account }
+        data: { account: transformedAccount }
       });
     } catch (error) {
       logger.error('Get email account by ID error:', error);
@@ -212,22 +252,27 @@ class EmailAccountController {
         });
       }
 
-      // Update account fields
-      const allowedFields = [
-        'name', 'server', 'port', 'secure', 'authMethod',
-        'username', 'password', 'oauthToken', 'oauthRefreshToken', 'syncSettings'
-      ];
-
-      allowedFields.forEach(field => {
-        if (updateData[field] !== undefined) {
-          account[field] = updateData[field];
-        }
-      });
+      // Update account fields - support nested structure
+      if (updateData.name !== undefined) {
+        account.name = updateData.name;
+      }
+      if (updateData.email !== undefined) {
+        account.email = updateData.email;
+      }
+      if (updateData.imapConfig !== undefined) {
+        account.imapConfig = { ...account.imapConfig, ...updateData.imapConfig };
+      }
+      if (updateData.authConfig !== undefined) {
+        account.authConfig = { ...account.authConfig, ...updateData.authConfig };
+      }
+      if (updateData.syncConfig !== undefined) {
+        account.syncConfig = { ...account.syncConfig, ...updateData.syncConfig };
+      }
 
       await account.save();
 
       // Test connection if server details changed
-      if (updateData.server || updateData.port || updateData.secure || updateData.authMethod) {
+      if (updateData.imapConfig || updateData.authConfig) {
         try {
           const connectionTest = await imapService.testConnection(account._id);
           account.connectionStatus = connectionTest.success ? 'connected' : 'failed';
@@ -249,13 +294,14 @@ class EmailAccountController {
             id: account._id,
             name: account.name,
             email: account.email,
-            server: account.server,
-            port: account.port,
-            secure: account.secure,
-            authMethod: account.authMethod,
+            imapConfig: account.imapConfig,
+            authConfig: {
+              method: account.authConfig.method,
+              username: account.authConfig.username
+            },
+            syncConfig: account.syncConfig,
             connectionStatus: account.connectionStatus,
             lastConnectionTest: account.lastConnectionTest,
-            syncSettings: account.syncSettings,
             updatedAt: account.updatedAt
           }
         }
@@ -277,6 +323,13 @@ class EmailAccountController {
   async deleteEmailAccount(req, res) {
     try {
       const { id } = req.params;
+
+      if (!id || id === 'undefined') {
+        return res.status(400).json({
+          success: false,
+          message: 'Account ID is required'
+        });
+      }
 
       const account = await EmailAccount.findOne({
         _id: id,
@@ -327,7 +380,7 @@ class EmailAccountController {
       const account = await EmailAccount.findOne({
         _id: id,
         userId: req.user._id
-      });
+      }).select('+authConfig.password');
 
       if (!account) {
         return res.status(404).json({
@@ -337,21 +390,39 @@ class EmailAccountController {
       }
 
       // Test connection
-      const connectionTest = await imapService.testConnection(id);
+      const imapConfig = {
+        host: account.imapConfig.host,
+        port: account.imapConfig.port,
+        secure: account.imapConfig.secure,
+        username: account.authConfig.username,
+        password: account.authConfig.password,
+        authMethod: account.authConfig.method
+      };
+      
+      console.log('Testing IMAP connection with config:', {
+        ...imapConfig,
+        password: account.authConfig.password ? '[HAS_PASSWORD]' : '[NO_PASSWORD]' // Show if password exists
+      });
+      
+      const connectionTest = await imapService.testConnection(imapConfig);
 
       // Update account status
-      account.connectionStatus = connectionTest.success ? 'connected' : 'failed';
+      const isConnected = connectionTest.success === true;
+      account.connectionStatus = isConnected ? 'connected' : 'failed';
       account.lastConnectionTest = new Date();
-      if (connectionTest.error) {
-        account.lastError = connectionTest.error;
+      if (!isConnected) {
+        account.lastError = connectionTest.error || 'Connection test failed';
       }
       await account.save();
 
       res.json({
         success: true,
-        message: connectionTest.success ? 'Connection test successful' : 'Connection test failed',
+        message: isConnected ? 'Connection test successful' : `Connection test failed: ${connectionTest.error}`,
         data: {
-          connectionTest,
+          connectionTest: {
+            success: isConnected,
+            error: connectionTest.error
+          },
           account: {
             id: account._id,
             connectionStatus: account.connectionStatus,

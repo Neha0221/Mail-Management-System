@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useReducer, useEffect } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, useCallback } from 'react';
 import emailService from '../../services/email/emailService';
 import emailAccountService from '../../services/email/emailAccountService';
 
@@ -23,6 +23,8 @@ const initialState = {
     searchQuery: '',
   },
   syncStatus: {},
+  testingConnections: {}, // Track which accounts are being tested
+  connectionTestResults: {}, // Store test results
 };
 
 // Action types
@@ -55,6 +57,11 @@ const EMAIL_ACTIONS = {
   // Sync Status
   SET_SYNC_STATUS: 'SET_SYNC_STATUS',
   UPDATE_SYNC_STATUS: 'UPDATE_SYNC_STATUS',
+  
+  // Connection Testing
+  SET_TESTING_CONNECTION: 'SET_TESTING_CONNECTION',
+  SET_CONNECTION_TEST_RESULT: 'SET_CONNECTION_TEST_RESULT',
+  CLEAR_CONNECTION_TEST_RESULT: 'CLEAR_CONNECTION_TEST_RESULT',
 };
 
 // Reducer
@@ -133,7 +140,10 @@ const emailReducer = (state, action) => {
     case EMAIL_ACTIONS.DELETE_EMAIL_ACCOUNT:
       return {
         ...state,
-        emailAccounts: state.emailAccounts.filter(account => account._id !== action.payload),
+        emailAccounts: state.emailAccounts.filter(account => {
+          const accountId = account._id || account.id;
+          return accountId !== action.payload;
+        }),
         selectedAccount: state.selectedAccount?._id === action.payload ? null : state.selectedAccount,
       };
     case EMAIL_ACTIONS.SET_SELECTED_ACCOUNT:
@@ -176,6 +186,36 @@ const emailReducer = (state, action) => {
         },
       };
     
+    // Connection Testing
+    case EMAIL_ACTIONS.SET_TESTING_CONNECTION:
+      return {
+        ...state,
+        testingConnections: {
+          ...state.testingConnections,
+          [action.payload.accountId]: action.payload.isTesting,
+        },
+      };
+    case EMAIL_ACTIONS.SET_CONNECTION_TEST_RESULT:
+      return {
+        ...state,
+        connectionTestResults: {
+          ...state.connectionTestResults,
+          [action.payload.accountId]: action.payload.result,
+        },
+        testingConnections: {
+          ...state.testingConnections,
+          [action.payload.accountId]: false,
+        },
+      };
+    case EMAIL_ACTIONS.CLEAR_CONNECTION_TEST_RESULT:
+      return {
+        ...state,
+        connectionTestResults: {
+          ...state.connectionTestResults,
+          [action.payload.accountId]: null,
+        },
+      };
+    
     default:
       return state;
   }
@@ -197,7 +237,9 @@ export const EmailProvider = ({ children }) => {
   const loadEmailAccounts = async () => {
     try {
       dispatch({ type: EMAIL_ACTIONS.SET_LOADING, payload: true });
-      const accounts = await emailAccountService.getEmailAccounts();
+      const response = await emailAccountService.getEmailAccounts();
+      // Extract accounts array from response
+      const accounts = response.data?.accounts || response.accounts || [];
       dispatch({ type: EMAIL_ACTIONS.SET_EMAIL_ACCOUNTS, payload: accounts });
     } catch (error) {
       dispatch({ type: EMAIL_ACTIONS.SET_ERROR, payload: error.message });
@@ -205,35 +247,43 @@ export const EmailProvider = ({ children }) => {
   };
 
   // Load emails
-  const loadEmails = async (params = {}) => {
+  const loadEmails = useCallback(async (params = {}) => {
     try {
       dispatch({ type: EMAIL_ACTIONS.SET_LOADING, payload: true });
+      
       const response = await emailService.getEmails({
         ...state.filters,
         ...params,
-        page: state.pagination.current,
-        limit: state.pagination.pageSize,
+        page: params.page || state.pagination.current,
+        limit: params.limit || state.pagination.pageSize,
       });
+      
+      // Handle the API response structure
+      const emails = response.data?.emails || response.emails || [];
+      const paginationData = response.data?.pagination || response.pagination || {};
+      
       dispatch({
         type: EMAIL_ACTIONS.SET_EMAILS,
         payload: {
-          emails: response.emails,
+          emails,
           pagination: {
-            current: response.pagination?.page || 1,
-            pageSize: response.pagination?.limit || 20,
-            total: response.pagination?.total || 0,
+            current: paginationData.currentPage || paginationData.page || 1,
+            pageSize: paginationData.limit || 20,
+            total: paginationData.totalCount || paginationData.total || 0,
           },
         },
       });
     } catch (error) {
       dispatch({ type: EMAIL_ACTIONS.SET_ERROR, payload: error.message });
     }
-  };
+  }, [state.filters, state.pagination.current, state.pagination.pageSize]);
 
   // Create email account
   const createEmailAccount = async (accountData) => {
     try {
-      const account = await emailAccountService.createEmailAccount(accountData);
+      const response = await emailAccountService.createEmailAccount(accountData);
+      // Extract account from response
+      const account = response.data?.account || response.account;
       dispatch({ type: EMAIL_ACTIONS.ADD_EMAIL_ACCOUNT, payload: account });
       return { success: true, account };
     } catch (error) {
@@ -245,7 +295,9 @@ export const EmailProvider = ({ children }) => {
   // Update email account
   const updateEmailAccount = async (id, accountData) => {
     try {
-      const account = await emailAccountService.updateEmailAccount(id, accountData);
+      const response = await emailAccountService.updateEmailAccount(id, accountData);
+      // Extract account from response
+      const account = response.data?.account || response.account;
       dispatch({ type: EMAIL_ACTIONS.UPDATE_EMAIL_ACCOUNT, payload: account });
       return { success: true, account };
     } catch (error) {
@@ -267,11 +319,50 @@ export const EmailProvider = ({ children }) => {
   };
 
   // Test connection
-  const testConnection = async (accountData) => {
+  const testConnection = async (accountId) => {
     try {
-      const result = await emailAccountService.testConnection(accountData);
+      // Set testing state
+      dispatch({ 
+        type: EMAIL_ACTIONS.SET_TESTING_CONNECTION, 
+        payload: { accountId, isTesting: true } 
+      });
+      
+      // Clear any previous test result
+      dispatch({ 
+        type: EMAIL_ACTIONS.CLEAR_CONNECTION_TEST_RESULT, 
+        payload: { accountId } 
+      });
+      
+      const result = await emailAccountService.testConnection(accountId);
+      
+      // Set test result
+      dispatch({ 
+        type: EMAIL_ACTIONS.SET_CONNECTION_TEST_RESULT, 
+        payload: { accountId, result } 
+      });
+      
+      // Update the account in the list with new connection status
+      if (result.success && result.data?.account) {
+        dispatch({ 
+          type: EMAIL_ACTIONS.UPDATE_EMAIL_ACCOUNT, 
+          payload: result.data.account 
+        });
+      }
+      
       return { success: true, result };
     } catch (error) {
+      // Set error result
+      dispatch({ 
+        type: EMAIL_ACTIONS.SET_CONNECTION_TEST_RESULT, 
+        payload: { 
+          accountId, 
+          result: { 
+            success: false, 
+            error: error.message 
+          } 
+        } 
+      });
+      
       return { success: false, error: error.message };
     }
   };
@@ -306,6 +397,14 @@ export const EmailProvider = ({ children }) => {
     dispatch({ type: EMAIL_ACTIONS.CLEAR_ERROR });
   };
 
+  // Clear connection test result
+  const clearConnectionTestResult = (accountId) => {
+    dispatch({ 
+      type: EMAIL_ACTIONS.CLEAR_CONNECTION_TEST_RESULT, 
+      payload: { accountId } 
+    });
+  };
+
   const value = {
     ...state,
     loadEmails,
@@ -314,6 +413,7 @@ export const EmailProvider = ({ children }) => {
     updateEmailAccount,
     deleteEmailAccount,
     testConnection,
+    clearConnectionTestResult,
     setFilters,
     clearFilters,
     setPagination,

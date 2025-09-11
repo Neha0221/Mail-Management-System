@@ -39,35 +39,39 @@ class EmailController {
       const filter = { userId: req.user._id };
 
       if (folder) filter.folder = folder;
-      if (accountId) filter.accountId = accountId;
-      if (from) filter.from = { $regex: from, $options: 'i' };
-      if (to) filter.to = { $regex: to, $options: 'i' };
-      if (subject) filter.subject = { $regex: subject, $options: 'i' };
-      if (hasAttachments !== undefined) filter.hasAttachments = hasAttachments === 'true';
-      if (isRead !== undefined) filter.isRead = isRead === 'true';
-      if (isFlagged !== undefined) filter.isFlagged = isFlagged === 'true';
+      if (accountId) filter.emailAccountId = accountId;
+      if (from) filter['headers.from'] = { $regex: from, $options: 'i' };
+      if (to) filter['headers.to'] = { $regex: to, $options: 'i' };
+      if (subject) filter['headers.subject'] = { $regex: subject, $options: 'i' };
+      if (hasAttachments !== undefined) filter['content.attachments'] = hasAttachments === 'true' ? { $exists: true, $ne: [] } : { $exists: false };
+      if (isRead !== undefined) filter['flags.seen'] = isRead === 'true';
+      if (isFlagged !== undefined) filter['flags.flagged'] = isFlagged === 'true';
 
       // Date range filter
       if (dateFrom || dateTo) {
-        filter.date = {};
-        if (dateFrom) filter.date.$gte = new Date(dateFrom);
-        if (dateTo) filter.date.$lte = new Date(dateTo);
+        filter['headers.date'] = {};
+        if (dateFrom) filter['headers.date'].$gte = new Date(dateFrom);
+        if (dateTo) filter['headers.date'].$lte = new Date(dateTo);
       }
 
       // Text search
       if (search) {
         filter.$or = [
-          { subject: { $regex: search, $options: 'i' } },
-          { from: { $regex: search, $options: 'i' } },
-          { to: { $regex: search, $options: 'i' } },
-          { textContent: { $regex: search, $options: 'i' } },
-          { htmlContent: { $regex: search, $options: 'i' } }
+          { 'headers.subject': { $regex: search, $options: 'i' } },
+          { 'headers.from': { $regex: search, $options: 'i' } },
+          { 'headers.to': { $regex: search, $options: 'i' } },
+          { 'content.text': { $regex: search, $options: 'i' } },
+          { 'content.html': { $regex: search, $options: 'i' } }
         ];
       }
 
       // Build sort object
       const sort = {};
-      sort[sortBy] = sortOrder === 'desc' ? -1 : 1;
+      if (sortBy === 'date') {
+        sort['headers.date'] = sortOrder === 'desc' ? -1 : 1;
+      } else {
+        sort[sortBy] = sortOrder === 'desc' ? -1 : 1;
+      }
 
       // Calculate pagination
       const skip = (parseInt(page) - 1) * parseInt(limit);
@@ -78,7 +82,7 @@ class EmailController {
           .sort(sort)
           .skip(skip)
           .limit(parseInt(limit))
-          .populate('accountId', 'name email server')
+          .populate('emailAccountId', 'name email server')
           .lean(),
         Email.countDocuments(filter)
       ]);
@@ -124,7 +128,7 @@ class EmailController {
       const email = await Email.findOne({
         _id: id,
         userId: req.user._id
-      }).populate('accountId', 'name email server');
+      }).populate('emailAccountId', 'name email server');
 
       if (!email) {
         return res.status(404).json({
@@ -134,9 +138,8 @@ class EmailController {
       }
 
       // Mark as read if not already
-      if (!email.isRead) {
-        email.isRead = true;
-        email.readAt = new Date();
+      if (!email.flags.seen) {
+        email.flags.seen = true;
         await email.save();
       }
 
@@ -187,15 +190,12 @@ class EmailController {
 
       // Update flags
       if (isRead !== undefined) {
-        email.isRead = isRead;
-        if (isRead && !email.readAt) {
-          email.readAt = new Date();
-        }
+        email.flags.seen = isRead;
       }
-      if (isFlagged !== undefined) email.isFlagged = isFlagged;
-      if (isDeleted !== undefined) email.isDeleted = isDeleted;
-      if (isAnswered !== undefined) email.isAnswered = isAnswered;
-      if (isDraft !== undefined) email.isDraft = isDraft;
+      if (isFlagged !== undefined) email.flags.flagged = isFlagged;
+      if (isDeleted !== undefined) email.flags.deleted = isDeleted;
+      if (isAnswered !== undefined) email.flags.answered = isAnswered;
+      if (isDraft !== undefined) email.flags.draft = isDraft;
 
       await email.save();
 
@@ -235,11 +235,10 @@ class EmailController {
       }
 
       // Soft delete
-      email.isDeleted = true;
-      email.deletedAt = new Date();
+      email.flags.deleted = true;
       await email.save();
 
-      logger.info(`Email deleted: ${email.subject} by user: ${req.user.email}`);
+      logger.info(`Email deleted: ${email.headers.subject} by user: ${req.user.email}`);
 
       res.json({
         success: true,
@@ -283,20 +282,14 @@ class EmailController {
       // Build update object
       const updateData = {};
       if (updates.isRead !== undefined) {
-        updateData.isRead = updates.isRead;
-        if (updates.isRead) {
-          updateData.readAt = new Date();
-        }
+        updateData['flags.seen'] = updates.isRead;
       }
-      if (updates.isFlagged !== undefined) updateData.isFlagged = updates.isFlagged;
+      if (updates.isFlagged !== undefined) updateData['flags.flagged'] = updates.isFlagged;
       if (updates.isDeleted !== undefined) {
-        updateData.isDeleted = updates.isDeleted;
-        if (updates.isDeleted) {
-          updateData.deletedAt = new Date();
-        }
+        updateData['flags.deleted'] = updates.isDeleted;
       }
-      if (updates.isAnswered !== undefined) updateData.isAnswered = updates.isAnswered;
-      if (updates.isDraft !== undefined) updateData.isDraft = updates.isDraft;
+      if (updates.isAnswered !== undefined) updateData['flags.answered'] = updates.isAnswered;
+      if (updates.isDraft !== undefined) updateData['flags.draft'] = updates.isDraft;
 
       // Update emails
       const result = await Email.updateMany(
@@ -380,13 +373,13 @@ class EmailController {
 
       // Build filter
       const filter = { userId: req.user._id };
-      if (accountId) filter.accountId = accountId;
+      if (accountId) filter.emailAccountId = accountId;
 
       // Date range filter
       if (dateFrom || dateTo) {
-        filter.date = {};
-        if (dateFrom) filter.date.$gte = new Date(dateFrom);
-        if (dateTo) filter.date.$lte = new Date(dateTo);
+        filter['headers.date'] = {};
+        if (dateFrom) filter['headers.date'].$gte = new Date(dateFrom);
+        if (dateTo) filter['headers.date'].$lte = new Date(dateTo);
       }
 
       // Get statistics
@@ -396,10 +389,10 @@ class EmailController {
           $group: {
             _id: null,
             totalEmails: { $sum: 1 },
-            readEmails: { $sum: { $cond: ['$isRead', 1, 0] } },
-            flaggedEmails: { $sum: { $cond: ['$isFlagged', 1, 0] } },
-            deletedEmails: { $sum: { $cond: ['$isDeleted', 1, 0] } },
-            emailsWithAttachments: { $sum: { $cond: ['$hasAttachments', 1, 0] } },
+            readEmails: { $sum: { $cond: ['$flags.seen', 1, 0] } },
+            flaggedEmails: { $sum: { $cond: ['$flags.flagged', 1, 0] } },
+            deletedEmails: { $sum: { $cond: ['$flags.deleted', 1, 0] } },
+            emailsWithAttachments: { $sum: { $cond: [{ $gt: [{ $size: '$content.attachments' }, 0] }, 1, 0] } },
             avgSize: { $avg: '$size' }
           }
         }
@@ -410,7 +403,7 @@ class EmailController {
         { $match: filter },
         {
           $group: {
-            _id: '$from',
+            _id: '$headers.from',
             count: { $sum: 1 }
           }
         },
@@ -424,9 +417,9 @@ class EmailController {
         {
           $group: {
             _id: {
-              year: { $year: '$date' },
-              month: { $month: '$date' },
-              day: { $dayOfMonth: '$date' }
+              year: { $year: '$headers.date' },
+              month: { $month: '$headers.date' },
+              day: { $dayOfMonth: '$headers.date' }
             },
             count: { $sum: 1 }
           }
@@ -476,18 +469,18 @@ class EmailController {
 
       // Build filter
       const filter = { userId: req.user._id };
-      if (accountId) filter.accountId = accountId;
+      if (accountId) filter.emailAccountId = accountId;
       if (folder) filter.folder = folder;
 
       // Date range filter
       if (dateFrom || dateTo) {
-        filter.date = {};
-        if (dateFrom) filter.date.$gte = new Date(dateFrom);
-        if (dateTo) filter.date.$lte = new Date(dateTo);
+        filter['headers.date'] = {};
+        if (dateFrom) filter['headers.date'].$gte = new Date(dateFrom);
+        if (dateTo) filter['headers.date'].$lte = new Date(dateTo);
       }
 
       const emails = await Email.find(filter)
-        .populate('accountId', 'name email server')
+        .populate('emailAccountId', 'name email server')
         .lean();
 
       if (format === 'json') {
@@ -537,16 +530,16 @@ class EmailController {
     ];
 
     const rows = emails.map(email => [
-      email.date.toISOString(),
-      email.from,
-      email.to,
-      email.subject,
+      email.headers.date.toISOString(),
+      email.headers.from,
+      email.headers.to.join(', '),
+      email.headers.subject,
       email.folder,
-      email.accountId?.name || '',
-      email.size,
-      email.isRead ? 'Yes' : 'No',
-      email.isFlagged ? 'Yes' : 'No',
-      email.hasAttachments ? 'Yes' : 'No'
+      email.emailAccountId?.name || '',
+      email.content.totalSize,
+      email.flags.seen ? 'Yes' : 'No',
+      email.flags.flagged ? 'Yes' : 'No',
+      email.content.attachments.length > 0 ? 'Yes' : 'No'
     ]);
 
     const csvContent = [headers, ...rows]

@@ -8,7 +8,7 @@ const router = express.Router();
 // Apply authentication middleware to all routes
 router.use(authMiddleware.authenticate);
 
-// Validation rules
+// Validation rules - Updated to match frontend form structure
 const addAccountValidation = [
   body('name')
     .notEmpty()
@@ -21,80 +21,91 @@ const addAccountValidation = [
     .withMessage('Please provide a valid email address')
     .normalizeEmail(),
   
-  body('server')
+  // IMAP Configuration validation
+  body('imapConfig.host')
     .notEmpty()
     .withMessage('IMAP server is required')
     .isLength({ max: 255 })
     .withMessage('Server address cannot exceed 255 characters'),
   
-  body('port')
+  body('imapConfig.port')
     .isInt({ min: 1, max: 65535 })
     .withMessage('Port must be a valid port number (1-65535)'),
   
-  body('secure')
+  body('imapConfig.secure')
     .isBoolean()
     .withMessage('Secure must be a boolean value'),
   
-  body('authMethod')
+  // Authentication validation
+  body('authConfig.method')
     .isIn(['PLAIN', 'LOGIN', 'OAUTH2'])
     .withMessage('Auth method must be one of: PLAIN, LOGIN, OAUTH2'),
   
-  body('username')
+  body('authConfig.username')
     .notEmpty()
     .withMessage('Username is required')
     .isLength({ max: 255 })
     .withMessage('Username cannot exceed 255 characters'),
   
-  body('password')
+  body('authConfig.password')
     .custom((value, { req }) => {
-      if ((req.body.authMethod === 'PLAIN' || req.body.authMethod === 'LOGIN') && !value) {
+      const authMethod = req.body.authConfig?.method;
+      if ((authMethod === 'PLAIN' || authMethod === 'LOGIN') && !value) {
         throw new Error('Password is required for PLAIN and LOGIN authentication');
       }
       return true;
     }),
   
-  body('oauthToken')
+  body('authConfig.oauthToken')
     .custom((value, { req }) => {
-      if (req.body.authMethod === 'OAUTH2' && !value) {
+      const authMethod = req.body.authConfig?.method;
+      if (authMethod === 'OAUTH2' && !value) {
         throw new Error('OAuth token is required for OAUTH2 authentication');
       }
       return true;
     }),
   
-  body('oauthRefreshToken')
+  body('authConfig.oauthRefreshToken')
     .custom((value, { req }) => {
-      if (req.body.authMethod === 'OAUTH2' && !value) {
+      const authMethod = req.body.authConfig?.method;
+      if (authMethod === 'OAUTH2' && !value) {
         throw new Error('OAuth refresh token is required for OAUTH2 authentication');
       }
       return true;
     }),
   
-  body('syncSettings')
+  // Sync Configuration validation (optional)
+  body('syncConfig')
     .optional()
     .isObject()
-    .withMessage('Sync settings must be an object'),
+    .withMessage('Sync config must be an object'),
   
-  body('syncSettings.enabled')
+  body('syncConfig.enabled')
     .optional()
     .isBoolean()
     .withMessage('Sync enabled must be a boolean'),
   
-  body('syncSettings.syncInterval')
+  body('syncConfig.frequency')
     .optional()
-    .isInt({ min: 60000 })
-    .withMessage('Sync interval must be at least 60000ms (1 minute)'),
+    .isIn(['5min', '15min', '30min', '1hour', '6hours', '12hours', '1day'])
+    .withMessage('Sync frequency must be a valid option'),
   
-  body('syncSettings.maxEmailsPerSync')
+  body('syncConfig.batchSize')
+    .optional()
+    .isInt({ min: 1, max: 1000 })
+    .withMessage('Batch size must be between 1 and 1000'),
+  
+  body('syncConfig.maxEmailsPerSync')
     .optional()
     .isInt({ min: 1, max: 10000 })
     .withMessage('Max emails per sync must be between 1 and 10000'),
   
-  body('syncSettings.preserveFlags')
+  body('syncConfig.preserveFlags')
     .optional()
     .isBoolean()
     .withMessage('Preserve flags must be a boolean'),
   
-  body('syncSettings.preserveDates')
+  body('syncConfig.preserveDates')
     .optional()
     .isBoolean()
     .withMessage('Preserve dates must be a boolean')
@@ -110,50 +121,86 @@ const updateAccountValidation = [
     .isLength({ max: 100 })
     .withMessage('Account name cannot exceed 100 characters'),
   
-  body('server')
+  body('email')
+    .optional()
+    .isEmail()
+    .withMessage('Please provide a valid email address')
+    .normalizeEmail(),
+  
+  body('imapConfig.host')
     .optional()
     .isLength({ max: 255 })
     .withMessage('Server address cannot exceed 255 characters'),
   
-  body('port')
+  body('imapConfig.port')
     .optional()
     .isInt({ min: 1, max: 65535 })
     .withMessage('Port must be a valid port number (1-65535)'),
   
-  body('secure')
+  body('imapConfig.secure')
     .optional()
     .isBoolean()
     .withMessage('Secure must be a boolean value'),
   
-  body('authMethod')
+  body('authConfig.method')
     .optional()
     .isIn(['PLAIN', 'LOGIN', 'OAUTH2'])
     .withMessage('Auth method must be one of: PLAIN, LOGIN, OAUTH2'),
   
-  body('username')
+  body('authConfig.username')
     .optional()
     .isLength({ max: 255 })
     .withMessage('Username cannot exceed 255 characters'),
   
-  body('password')
+  body('authConfig.password')
     .optional()
     .isLength({ min: 1 })
     .withMessage('Password cannot be empty'),
   
-  body('oauthToken')
+  body('authConfig.oauthToken')
     .optional()
     .isLength({ min: 1 })
     .withMessage('OAuth token cannot be empty'),
   
-  body('oauthRefreshToken')
+  body('authConfig.oauthRefreshToken')
     .optional()
     .isLength({ min: 1 })
     .withMessage('OAuth refresh token cannot be empty'),
   
-  body('syncSettings')
+  body('syncConfig')
     .optional()
     .isObject()
-    .withMessage('Sync settings must be an object')
+    .withMessage('Sync config must be an object'),
+  
+  body('syncConfig.enabled')
+    .optional()
+    .isBoolean()
+    .withMessage('Sync enabled must be a boolean'),
+  
+  body('syncConfig.frequency')
+    .optional()
+    .isIn(['5min', '15min', '30min', '1hour', '6hours', '12hours', '1day'])
+    .withMessage('Sync frequency must be a valid option'),
+  
+  body('syncConfig.batchSize')
+    .optional()
+    .isInt({ min: 1, max: 1000 })
+    .withMessage('Batch size must be between 1 and 1000'),
+  
+  body('syncConfig.maxEmailsPerSync')
+    .optional()
+    .isInt({ min: 1, max: 10000 })
+    .withMessage('Max emails per sync must be between 1 and 10000'),
+  
+  body('syncConfig.preserveFlags')
+    .optional()
+    .isBoolean()
+    .withMessage('Preserve flags must be a boolean'),
+  
+  body('syncConfig.preserveDates')
+    .optional()
+    .isBoolean()
+    .withMessage('Preserve dates must be a boolean')
 ];
 
 const updateSyncSettingsValidation = [
@@ -161,31 +208,36 @@ const updateSyncSettingsValidation = [
     .isMongoId()
     .withMessage('Invalid account ID'),
   
-  body('syncSettings')
+  body('syncConfig')
     .isObject()
-    .withMessage('Sync settings must be an object'),
+    .withMessage('Sync config must be an object'),
   
-  body('syncSettings.enabled')
+  body('syncConfig.enabled')
     .optional()
     .isBoolean()
     .withMessage('Sync enabled must be a boolean'),
   
-  body('syncSettings.syncInterval')
+  body('syncConfig.frequency')
     .optional()
-    .isInt({ min: 60000 })
-    .withMessage('Sync interval must be at least 60000ms (1 minute)'),
+    .isIn(['5min', '15min', '30min', '1hour', '6hours', '12hours', '1day'])
+    .withMessage('Sync frequency must be a valid option'),
   
-  body('syncSettings.maxEmailsPerSync')
+  body('syncConfig.batchSize')
+    .optional()
+    .isInt({ min: 1, max: 1000 })
+    .withMessage('Batch size must be between 1 and 1000'),
+  
+  body('syncConfig.maxEmailsPerSync')
     .optional()
     .isInt({ min: 1, max: 10000 })
     .withMessage('Max emails per sync must be between 1 and 10000'),
   
-  body('syncSettings.preserveFlags')
+  body('syncConfig.preserveFlags')
     .optional()
     .isBoolean()
     .withMessage('Preserve flags must be a boolean'),
   
-  body('syncSettings.preserveDates')
+  body('syncConfig.preserveDates')
     .optional()
     .isBoolean()
     .withMessage('Preserve dates must be a boolean')

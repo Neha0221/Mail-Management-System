@@ -25,13 +25,13 @@ class AnalyticsController {
 
       // Build filter
       const filter = { userId: req.user._id };
-      if (accountId) filter.accountId = accountId;
+      if (accountId) filter.emailAccountId = accountId;
 
       // Date range filter
       if (dateFrom || dateTo) {
-        filter.date = {};
-        if (dateFrom) filter.date.$gte = new Date(dateFrom);
-        if (dateTo) filter.date.$lte = new Date(dateTo);
+        filter['headers.date'] = {};
+        if (dateFrom) filter['headers.date'].$gte = new Date(dateFrom);
+        if (dateTo) filter['headers.date'].$lte = new Date(dateTo);
       }
 
       // Get analytics overview from database
@@ -65,13 +65,13 @@ class AnalyticsController {
 
       // Build filter
       const filter = { userId: req.user._id };
-      if (accountId) filter.accountId = accountId;
+      if (accountId) filter.emailAccountId = accountId;
 
       // Date range filter
       if (dateFrom || dateTo) {
-        filter.date = {};
-        if (dateFrom) filter.date.$gte = new Date(dateFrom);
-        if (dateTo) filter.date.$lte = new Date(dateTo);
+        filter['headers.date'] = {};
+        if (dateFrom) filter['headers.date'].$gte = new Date(dateFrom);
+        if (dateTo) filter['headers.date'].$lte = new Date(dateTo);
       }
 
       // Get dashboard data using basic overview
@@ -97,9 +97,52 @@ class AnalyticsController {
    */
   async getSenderAnalytics(req, res) {
     try {
+      const {
+        accountId,
+        dateFrom,
+        dateTo,
+        limit = 10
+      } = req.query;
+
+      // Build filter
+      const filter = { userId: req.user._id };
+      if (accountId) filter.emailAccountId = accountId;
+
+      // Date range filter
+      if (dateFrom || dateTo) {
+        filter['headers.date'] = {};
+        if (dateFrom) filter['headers.date'].$gte = new Date(dateFrom);
+        if (dateTo) filter['headers.date'].$lte = new Date(dateTo);
+      }
+
+      // Get sender analytics
+      const senderAnalytics = await Email.aggregate([
+        { $match: filter },
+        {
+          $group: {
+            _id: '$headers.from',
+            count: { $sum: 1 },
+            lastEmail: { $max: '$headers.date' }
+          }
+        },
+        { $sort: { count: -1 } },
+        { $limit: parseInt(limit) },
+        {
+          $project: {
+            sender: {
+              email: '$_id',
+              name: { $ifNull: ['$analytics.sender.name', null] }
+            },
+            count: 1,
+            lastEmail: 1,
+            percentage: { $multiply: [{ $divide: ['$count', { $sum: '$count' }] }, 100] }
+          }
+        }
+      ]);
+
       res.json({
         success: true,
-        data: { senderAnalytics: [] }
+        data: { senderAnalytics }
       });
     } catch (error) {
       logger.error('Get sender analytics error:', error);
@@ -117,9 +160,60 @@ class AnalyticsController {
    */
   async getDomainAnalytics(req, res) {
     try {
+      const {
+        accountId,
+        dateFrom,
+        dateTo,
+        limit = 10
+      } = req.query;
+
+      // Build filter
+      const filter = { userId: req.user._id };
+      if (accountId) filter.emailAccountId = accountId;
+
+      // Date range filter
+      if (dateFrom || dateTo) {
+        filter['headers.date'] = {};
+        if (dateFrom) filter['headers.date'].$gte = new Date(dateFrom);
+        if (dateTo) filter['headers.date'].$lte = new Date(dateTo);
+      }
+
+      // Get domain analytics
+      const domainAnalytics = await Email.aggregate([
+        { $match: filter },
+        {
+          $addFields: {
+            domain: {
+              $arrayElemAt: [
+                { $split: ['$headers.from', '@'] },
+                1
+              ]
+            }
+          }
+        },
+        {
+          $group: {
+            _id: '$domain',
+            count: { $sum: 1 },
+            lastEmail: { $max: '$headers.date' },
+            esp: { $first: '$analytics.esp.provider' }
+          }
+        },
+        { $sort: { count: -1 } },
+        { $limit: parseInt(limit) },
+        {
+          $project: {
+            domain: '$_id',
+            count: 1,
+            lastEmail: 1,
+            esp: { $ifNull: ['$esp', 'Unknown'] }
+          }
+        }
+      ]);
+
       res.json({
         success: true,
-        data: { domainAnalytics: [] }
+        data: { domainAnalytics }
       });
     } catch (error) {
       logger.error('Get domain analytics error:', error);
@@ -137,9 +231,76 @@ class AnalyticsController {
    */
   async getESPAnalytics(req, res) {
     try {
+      const {
+        accountId,
+        dateFrom,
+        dateTo,
+        limit = 10
+      } = req.query;
+
+      // Build filter
+      const filter = { userId: req.user._id };
+      if (accountId) filter.emailAccountId = accountId;
+
+      // Date range filter
+      if (dateFrom || dateTo) {
+        filter['headers.date'] = {};
+        if (dateFrom) filter['headers.date'].$gte = new Date(dateFrom);
+        if (dateTo) filter['headers.date'].$lte = new Date(dateTo);
+      }
+
+      // Get ESP analytics
+      const espAnalytics = await Email.aggregate([
+        { $match: filter },
+        {
+          $addFields: {
+            domain: {
+              $arrayElemAt: [
+                { $split: ['$headers.from', '@'] },
+                1
+              ]
+            }
+          }
+        },
+        {
+          $group: {
+            _id: {
+              $cond: {
+                if: { $ne: ['$analytics.esp.provider', null] },
+                then: '$analytics.esp.provider',
+                else: {
+                  $switch: {
+                    branches: [
+                      { case: { $regexMatch: { input: '$domain', regex: /gmail\.com$/i } }, then: 'Gmail' },
+                      { case: { $regexMatch: { input: '$domain', regex: /outlook\.com|hotmail\.com|live\.com$/i } }, then: 'Outlook' },
+                      { case: { $regexMatch: { input: '$domain', regex: /yahoo\.com$/i } }, then: 'Yahoo' },
+                      { case: { $regexMatch: { input: '$domain', regex: /amazonaws\.com$/i } }, then: 'Amazon SES' },
+                      { case: { $regexMatch: { input: '$domain', regex: /sendgrid\.net$/i } }, then: 'SendGrid' },
+                      { case: { $regexMatch: { input: '$domain', regex: /mailchimp\.com$/i } }, then: 'Mailchimp' }
+                    ],
+                    default: 'Other'
+                  }
+                }
+              }
+            },
+            count: { $sum: 1 },
+            lastEmail: { $max: '$headers.date' }
+          }
+        },
+        { $sort: { count: -1 } },
+        { $limit: parseInt(limit) },
+        {
+          $project: {
+            esp: '$_id',
+            count: 1,
+            lastEmail: 1
+          }
+        }
+      ]);
+
       res.json({
         success: true,
-        data: { espAnalytics: [] }
+        data: { espAnalytics }
       });
     } catch (error) {
       logger.error('Get ESP analytics error:', error);
@@ -197,9 +358,84 @@ class AnalyticsController {
    */
   async getEmailVolumeTrends(req, res) {
     try {
+      const {
+        accountId,
+        dateFrom,
+        dateTo,
+        period = 'day'
+      } = req.query;
+
+      // Build filter
+      const filter = { userId: req.user._id };
+      if (accountId) filter.emailAccountId = accountId;
+
+      // Date range filter
+      if (dateFrom || dateTo) {
+        filter['headers.date'] = {};
+        if (dateFrom) filter['headers.date'].$gte = new Date(dateFrom);
+        if (dateTo) filter['headers.date'].$lte = new Date(dateTo);
+      }
+
+      // Determine date grouping
+      let dateGroup;
+      switch (period) {
+        case 'hour':
+          dateGroup = {
+            year: { $year: '$headers.date' },
+            month: { $month: '$headers.date' },
+            day: { $dayOfMonth: '$headers.date' },
+            hour: { $hour: '$headers.date' }
+          };
+          break;
+        case 'week':
+          dateGroup = {
+            year: { $year: '$headers.date' },
+            week: { $week: '$headers.date' }
+          };
+          break;
+        case 'month':
+          dateGroup = {
+            year: { $year: '$headers.date' },
+            month: { $month: '$headers.date' }
+          };
+          break;
+        default: // day
+          dateGroup = {
+            year: { $year: '$headers.date' },
+            month: { $month: '$headers.date' },
+            day: { $dayOfMonth: '$headers.date' }
+          };
+      }
+
+      // Get volume trends
+      const volumeTrends = await Email.aggregate([
+        { $match: filter },
+        {
+          $group: {
+            _id: dateGroup,
+            count: { $sum: 1 },
+            date: { $first: '$headers.date' }
+          }
+        },
+        { $sort: { '_id.year': 1, '_id.month': 1, '_id.day': 1, '_id.hour': 1, '_id.week': 1 } },
+        {
+          $project: {
+            date: {
+              $dateFromParts: {
+                year: '$_id.year',
+                month: '$_id.month',
+                day: '$_id.day',
+                hour: '$_id.hour'
+              }
+            },
+            count: 1
+          }
+        }
+      ]);
+
       res.json({
         success: true,
-        data: { volumeTrends: [] }
+        data: { volumeTrends }
       });
     } catch (error) {
       logger.error('Get email volume trends error:', error);

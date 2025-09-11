@@ -23,52 +23,102 @@ const searchValidation = [
   
   body('filters.accountId')
     .optional()
-    .isMongoId()
+    .custom((value) => {
+      if (value === null || value === undefined || value === '') {
+        return true; // Allow null, undefined, or empty string
+      }
+      return require('mongoose').Types.ObjectId.isValid(value);
+    })
     .withMessage('Account ID must be a valid MongoDB ObjectId'),
   
   body('filters.folder')
     .optional()
-    .isString()
+    .custom((value) => {
+      if (value === null || value === undefined || value === '') {
+        return true; // Allow null, undefined, or empty string
+      }
+      return typeof value === 'string';
+    })
     .withMessage('Folder must be a string'),
   
   body('filters.from')
     .optional()
-    .isString()
+    .custom((value) => {
+      if (value === null || value === undefined || value === '') {
+        return true; // Allow null, undefined, or empty string
+      }
+      return typeof value === 'string';
+    })
     .withMessage('From must be a string'),
   
   body('filters.to')
     .optional()
-    .isString()
+    .custom((value) => {
+      if (value === null || value === undefined || value === '') {
+        return true; // Allow null, undefined, or empty string
+      }
+      return typeof value === 'string';
+    })
     .withMessage('To must be a string'),
   
   body('filters.subject')
     .optional()
-    .isString()
+    .custom((value) => {
+      if (value === null || value === undefined || value === '') {
+        return true; // Allow null, undefined, or empty string
+      }
+      return typeof value === 'string';
+    })
     .withMessage('Subject must be a string'),
   
   body('filters.dateFrom')
     .optional()
-    .isISO8601()
+    .custom((value) => {
+      if (value === null || value === undefined || value === '') {
+        return true; // Allow null, undefined, or empty string
+      }
+      return new Date(value).toString() !== 'Invalid Date';
+    })
     .withMessage('Date from must be a valid ISO 8601 date'),
   
   body('filters.dateTo')
     .optional()
-    .isISO8601()
+    .custom((value) => {
+      if (value === null || value === undefined || value === '') {
+        return true; // Allow null, undefined, or empty string
+      }
+      return new Date(value).toString() !== 'Invalid Date';
+    })
     .withMessage('Date to must be a valid ISO 8601 date'),
   
   body('filters.hasAttachments')
     .optional()
-    .isBoolean()
+    .custom((value) => {
+      if (value === null || value === undefined) {
+        return true; // Allow null or undefined
+      }
+      return typeof value === 'boolean';
+    })
     .withMessage('Has attachments must be a boolean'),
   
   body('filters.isRead')
     .optional()
-    .isBoolean()
+    .custom((value) => {
+      if (value === null || value === undefined) {
+        return true; // Allow null or undefined
+      }
+      return typeof value === 'boolean';
+    })
     .withMessage('Is read must be a boolean'),
   
   body('filters.isFlagged')
     .optional()
-    .isBoolean()
+    .custom((value) => {
+      if (value === null || value === undefined) {
+        return true; // Allow null or undefined
+      }
+      return typeof value === 'boolean';
+    })
     .withMessage('Is flagged must be a boolean'),
   
   body('sortBy')

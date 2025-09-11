@@ -5,7 +5,7 @@ class EmailAccountService {
   // Get all email accounts
   async getEmailAccounts() {
     try {
-      const response = await apiClient.get(API_ENDPOINTS.EMAIL_ACCOUNTS.GET_ALL);
+      const response = await apiClient.get('/email-accounts');
       return response.data;
     } catch (error) {
       throw error;
@@ -15,7 +15,7 @@ class EmailAccountService {
   // Get email account by ID
   async getEmailAccountById(id) {
     try {
-      const response = await apiClient.get(API_ENDPOINTS.EMAIL_ACCOUNTS.GET_BY_ID(id));
+      const response = await apiClient.get(`/email-accounts/${id}`);
       return response.data;
     } catch (error) {
       throw error;
@@ -25,7 +25,7 @@ class EmailAccountService {
   // Create new email account
   async createEmailAccount(accountData) {
     try {
-      const response = await apiClient.post(API_ENDPOINTS.EMAIL_ACCOUNTS.CREATE, accountData);
+      const response = await apiClient.post('/email-accounts', accountData);
       return response.data;
     } catch (error) {
       throw error;
@@ -35,7 +35,7 @@ class EmailAccountService {
   // Update email account
   async updateEmailAccount(id, accountData) {
     try {
-      const response = await apiClient.put(API_ENDPOINTS.EMAIL_ACCOUNTS.UPDATE(id), accountData);
+      const response = await apiClient.put(`/email-accounts/${id}`, accountData);
       return response.data;
     } catch (error) {
       throw error;
@@ -45,7 +45,7 @@ class EmailAccountService {
   // Delete email account
   async deleteEmailAccount(id) {
     try {
-      const response = await apiClient.delete(API_ENDPOINTS.EMAIL_ACCOUNTS.DELETE(id));
+      const response = await apiClient.delete(`/email-accounts/${id}`);
       return response.data;
     } catch (error) {
       throw error;
@@ -53,9 +53,9 @@ class EmailAccountService {
   }
 
   // Test email account connection
-  async testConnection(accountData) {
+  async testConnection(accountId) {
     try {
-      const response = await apiClient.post(API_ENDPOINTS.EMAIL_ACCOUNTS.TEST_CONNECTION, accountData);
+      const response = await apiClient.post(`/email-accounts/${accountId}/test-connection`);
       return response.data;
     } catch (error) {
       throw error;
@@ -65,7 +65,7 @@ class EmailAccountService {
   // Get account sync status
   async getSyncStatus(accountId) {
     try {
-      const response = await apiClient.get(`${API_ENDPOINTS.EMAIL_ACCOUNTS.GET_BY_ID(accountId)}/sync-status`);
+      const response = await apiClient.get(`/email-accounts/${accountId}/sync-status`);
       return response.data;
     } catch (error) {
       throw error;
@@ -75,7 +75,7 @@ class EmailAccountService {
   // Start sync for account
   async startSync(accountId) {
     try {
-      const response = await apiClient.post(`${API_ENDPOINTS.EMAIL_ACCOUNTS.GET_BY_ID(accountId)}/sync/start`);
+      const response = await apiClient.post(`/email-accounts/${accountId}/sync/start`);
       return response.data;
     } catch (error) {
       throw error;
@@ -85,7 +85,7 @@ class EmailAccountService {
   // Stop sync for account
   async stopSync(accountId) {
     try {
-      const response = await apiClient.post(`${API_ENDPOINTS.EMAIL_ACCOUNTS.GET_BY_ID(accountId)}/sync/stop`);
+      const response = await apiClient.post(`/email-accounts/${accountId}/sync/stop`);
       return response.data;
     } catch (error) {
       throw error;
@@ -95,7 +95,7 @@ class EmailAccountService {
   // Pause sync for account
   async pauseSync(accountId) {
     try {
-      const response = await apiClient.post(`${API_ENDPOINTS.EMAIL_ACCOUNTS.GET_BY_ID(accountId)}/sync/pause`);
+      const response = await apiClient.post(`/email-accounts/${accountId}/sync/pause`);
       return response.data;
     } catch (error) {
       throw error;
@@ -105,7 +105,7 @@ class EmailAccountService {
   // Resume sync for account
   async resumeSync(accountId) {
     try {
-      const response = await apiClient.post(`${API_ENDPOINTS.EMAIL_ACCOUNTS.GET_BY_ID(accountId)}/sync/resume`);
+      const response = await apiClient.post(`/email-accounts/${accountId}/sync/resume`);
       return response.data;
     } catch (error) {
       throw error;
