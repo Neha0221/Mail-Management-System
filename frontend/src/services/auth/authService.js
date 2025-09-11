@@ -6,7 +6,7 @@ class AuthService {
   async login(credentials) {
     try {
       const response = await apiClient.post(API_ENDPOINTS.AUTH.LOGIN, credentials);
-      const { accessToken, refreshToken, user } = response.data;
+      const { token: accessToken, refreshToken, user } = response.data.data;
       
       // Store tokens
       localStorage.setItem('accessToken', accessToken);
